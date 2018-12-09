@@ -27,7 +27,7 @@ const validate = createValidator(rules);
 const change = {
   field1: ""
 };
-validate(change).then(results => {
+validate(change).then(([results]) => {
   // --> results: [{ type: 'filled', prop: 'field1', payload: 'Required' }]
 });
 ```
@@ -80,7 +80,7 @@ const example = createRule(
   ({ type, prop }) => `${type} payload for ${prop}`
 );
 const validate = createValidator({ field1: [example] });
-validate({ field1: "" }).then(result => {
+validate({ field1: "" }).then(([result]) => {
   // --> result: { type: "example", prop: "field1", payload: "example payload for field1" }
 });
 ```
@@ -124,7 +124,7 @@ const rules = {
 };
 const validate = createValidator(rules);
 const change = { field1: "abc", field2: "xyz" };
-validate(change).then(result => {
+validate(change).then(([result]) => {
   // --> result: [ {type: "async", prop: "field1" }, {type: "async", prop: "field2" }]
 });
 ```
@@ -153,7 +153,7 @@ async function handleChange(event) {
   } = event;
   const change = { [name]: value };
   // ... update state with the change ...
-  const results = await validate(change);
+  const [results] = await validate(change);
   // ... translate results into validation messages ...
 }
 ```
@@ -167,8 +167,9 @@ interrupted or discarded calls.
 
 ```js
 try {
-  const results = await validate(change);
+  const [results, mergedChange] = await validate(change);
   // ... translate results into validation messages ...
+  // mergedChange will have the changes of interrupted calls to validate()
 } catch (error) {
   if (error instanceof ValidatorError) {
     const { validatorErrorPayload: results } = error;
@@ -204,12 +205,14 @@ the change to an API endpoint for server-side validation.
 
 ```js
 // server.js
-import { createRule, createValidator } from 'validator-creator'
+import { createRule, createValidator } from "validator-creator";
 const filled = createRule("filled", value => value.length > 0);
 const rules = {
   field1: [filled]
 };
-export const validate = createValidator(rules);
+const serverValidate = createValidator(rules);
+export const validate = change =>
+  serverValidate(change).then(([result]) => result);
 ```
 
 On the "client" an async rule name `server` is created which will send the
@@ -224,22 +227,28 @@ Finally we transform the list of results into a "messages" object with the field
 name as key and the payload as value.
 
 ```js
-import { createAsyncRule, createValidator, getPayload } from 'validator-creator'
-import * as Server from './server'
+import {
+  createAsyncRule,
+  createValidator,
+  getPayload
+} from "validator-creator";
+import * as Server from "./server";
 const server = createAsyncRule(
   change => Server.validate(change),
   ({ type, prop }) => `${type}, ${prop}`
 );
 const rules = {
   field1: [server]
-}
-const validate = createValidator(rules)
+};
+const validate = createValidator(rules);
 const change = {
   field1: ""
-}
-validate(change).then(getPayload).then(messages => {
-  // --> messages: { field1: "filled, field1" }
-})
+};
+validate(change)
+  .then(getPayload)
+  .then(messages => {
+    // --> messages: { field1: "filled, field1" }
+  });
 ```
 
 ## Example: "max length" rule
@@ -248,22 +257,25 @@ This example demonstrates a "rule creator" pattern. This allows having rules tha
 take arguments.
 
 ```js
-import { createRule, createValidator, getPayload } from 'validator-creator'
-const maxLength = length => createRule(
-  "maxLength",
-  value => value.length <= length,
-  `Maximum length is ${length} characters`
-)
+import { createRule, createValidator, getPayload } from "validator-creator";
+const maxLength = length =>
+  createRule(
+    "maxLength",
+    value => value.length <= length,
+    `Maximum length is ${length} characters`
+  );
 const rules = {
   field1: [maxLength(5)],
   field2: [maxLength(10)]
-}
-const validate = createValidator(rules)
+};
+const validate = createValidator(rules);
 const change = {
   field1: "123456",
   field2: "123456"
-}
-validate(change).then(getPayload).then(messages => {
-  // --> messages: { field1: "Maximum length is 5 characters"}
-})
+};
+validate(change)
+  .then(getPayload)
+  .then(messages => {
+    // --> messages: { field1: "Maximum length is 5 characters"}
+  });
 ```

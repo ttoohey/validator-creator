@@ -1,8 +1,11 @@
 {
   "name": "validator-creator",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Library to create client-side validation functions",
-  "keywords": ["validate", "asynchronous validation"],
+  "keywords": [
+    "validate",
+    "asynchronous validation"
+  ],
   "homepage": "https://github.com/ttoohey/validator-creator",
   "bugs": "https://github.com/ttoohey/validator-creator/issues",
   "license": "ISC",
@@ -18,6 +21,7 @@
   "scripts": {
     "test": "jest",
     "build": "babel src --out-dir dist",
+    "build:doc": "documentation build src/** -f md -o doc.md",
     "clean": "rm -rf dist *.tgz",
     "prepare": "npm run clean && npm test && npm run build"
   },
@@ -29,6 +33,7 @@
     "babel-core": "^7.0.0-bridge.0",
     "babel-eslint": "^10.0.1",
     "babel-preset-minify": "^0.5.0",
+    "documentation": "^9.0.0-alpha.1",
     "eslint": "^5.9.0",
     "eslint-config-prettier": "^3.3.0",
     "eslint-config-standard": "^12.0.0",

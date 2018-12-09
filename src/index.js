@@ -1,4 +1,13 @@
+/**
+ * Error thrown by interrupted validations
+ *
+ */
 export class ValidatorError extends Error {
+  /**
+   * Throw an error
+   * @param {?Array.<ValidatorResult>} results - the stale results
+   * @param {...*} params  - passed to Error constructor
+   */
   constructor(results, ...params) {
     super(...params);
     if (Error.captureStackTrace) {
@@ -9,12 +18,9 @@ export class ValidatorError extends Error {
 }
 
 /**
- * Creates a validator function based on the provided rules
- * @param  {object} rules - Keys are the field names; the values are a list of
- *     rule functions to apply to that field
- * @return {[object]} - A list of failing rule objects containing a
- *     { type, prop } pair that identifies the rule that failed and the field
- *     that triggered it
+ * Creates a {@link Validate} function based on the provided rules
+ * @param  {RuleCollection} rules
+ * @return {Validate} - The function to use to perform a validation.
  */
 export function createValidator(rules) {
   const validate = validator(rules);
@@ -38,23 +44,21 @@ export function createValidator(rules) {
       }
     }
     state.active = true;
-    let result
-    if (state.cache.change === state.change) {
-      result = state.cache.result
-    } else {
-      state.cache.change = state.change
-      state.cache.result = result = (await validate(state.change, ...args))
+    if (state.cache.change !== state.change) {
+      state.cache.change = state.change;
+      state.cache.result = await validate(state.change, ...args);
     }
     state.active = false;
     state.blocked.forEach(resolve => resolve());
     state.blocked = [];
     if (timeline !== state.timeline) {
-      throw new ValidatorError(result);
+      throw new ValidatorError(state.cache.result);
     }
+    const returnValue = [state.cache.result, state.cache.change];
     state.change = {};
-    state.cache = {}
+    state.cache = {};
     state.timeline = 0;
-    return result;
+    return returnValue;
   };
 }
 
@@ -97,13 +101,13 @@ function validator(rules) {
 /**
  * Helper for defining simple validation rules
  * @param  {string} type - names the rule
- * @param  {function} validate - callback that accepts a value and returns a
- *     boolean; does the value pass or fail the rule
- * @param  {function|*} payload - data to include in the result if the rule
- *     fails. If a function is provided it will be called with the result object
- *     and the response used as result.payload
- * @return {function} - function to call to apply the rule to a change; typically
- *     this is passed as part of a rule collection to createValidator
+ * @param  {ValidateValue} validate - callback that accepts a value and returns a
+ *   boolean; does the value pass or fail the rule?
+ * @param  {GetPayload|*} payload - data to include in the result if the rule
+ *   fails. If a function is provided it will be called with the result object
+ *   and the response used as result.payload
+ * @return {Rule} - function to call to apply the rule to a change; typically
+ *   this is passed as part of a {@link RuleCollection} to {@link createValidator}
  */
 export function createRule(type, validate, payload = null) {
   if (payload === null) {
@@ -122,13 +126,13 @@ export function createRule(type, validate, payload = null) {
 /**
  * Helper for augmenting asynchronous validation rules with payloads.
  * @param  {function} validate - callback that accepts a `change` object and
- *     returns a list of { type, prop } objects for each element in the change
- *     that failed has a failing rule.
- * @param  {function|*} [payload=null] - data to augment the result with. If a
- *     function is provided it will be called with the result object and the
- *     response used as the result.payload
- * @return {function} - function to call to apply the rule to a change; typically
- *     this is passed as part of a rule collection to createValidator
+ *   returns a list of { type, prop } objects for each element in the change
+ *   that failed has a failing rule.
+ * @param  {GetPayload|*} [payload=null] - data to augment the result with. If a
+ *   function is provided it will be called with the result object and the
+ *   response used as the result.payload
+ * @return {AsyncRule} - function to call to apply the rule to a change; typically
+ *   this is passed as part of a {@link RuleCollection} to {@link createValidator}
  */
 export function createAsyncRule(validate, payload = null) {
   if (payload === null) {
@@ -147,12 +151,124 @@ export function createAsyncRule(validate, payload = null) {
  * Helper for transforming a list of validator results into a simpler object
  * mapping field names to payloads.
  *
- * @param  {[object]} results - List of validator result object containing { type, prop, payload }
+ * @param {Array} args
+ * @param {ValidatorResult} args.0 - List of validator result object containing { type, prop, payload }
+ * @param {FormData} args.1 - The data the results apply to
  * @return {object} - The results reduced to {[prop]: payload, ...}
  */
-export function getPayload(results) {
-  return results.reduce(
-    (o, { prop, payload }) => ({ ...o, [prop]: payload }),
+export function getPayload([results, change]) {
+  const cleared = Object.keys(change || {}).reduce(
+    (o, k) => ({ ...o, [k]: null }),
     {}
   );
+  return results.reduce(
+    (o, { prop, payload }) => ({ ...o, [prop]: payload }),
+    cleared
+  );
 }
+
+/**
+ * Perform an asynchronous validation of a change
+ *
+ * @async
+ * @callback AsyncRule
+ * @param {FormData} change - The data being validated
+ * @return {Promise.<ValidatorResult[]>} - Contains an item for each field that failed
+ */
+
+/**
+ * Data to apply a validation to
+ *
+ * @example
+ *
+ * {
+ *   field1: "Field 1 value",
+ *   field2: "Field 2 value"
+ * }
+
+ * @typedef {Object.<string, *>} FormData
+ */
+
+/**
+ * Get payload data to augment a {@link ValidatorResult}
+ * 
+ * @callback GetPayload
+ * @param {ValidatorResult} result - Identifies the rule and field that failed the validation
+ * @return {*} - Application specific data
+ */
+
+/**
+ * Perform a validation of a value
+ * @callback Rule
+ * @param {FormData} change - The data being validated
+ * @param {string} prop - The field in `change` to apply the validation to
+ * @return {?ValidatorResult} - Returns null if the field passes the validation
+ */
+
+/**
+ * Defines the rules that applies to each field
+ * @typedef {Object.<string,Array.<Rule|AsyncRule>>} RuleCollection
+ */
+
+/**
+ * This function is returned by {@link createValidator} to be used to perform a validation.
+ *
+ * @async
+ * @function Validate
+ * @param {FormData} change - The data to be validated
+ * @return {Promise.<ValidateResult>} - result and merged change
+ * @throws {ValidatorError} - if an asynchronous validation is interrupted
+ */
+
+/**
+ * Return value from the {@link Validate} function
+ * 
+ * @typedef {Array} ValidateResult
+ * @property {ValidatorResult[]} 0
+ * @property {FormData} 1
+ */
+
+/**
+ * Validate a change object
+ *
+ * Used as the `validate` parameter to {@link createAsyncRule}
+ *
+ * @async
+ * @callback ValidateFormData
+ * @param {FormData} change - the data being validated
+ * @return {Promise.<ValidatorResult[]>}
+ */
+
+/**
+ * Validates a value to determine whether it passes a test.
+ *
+ * Used as the `validate` parameter to {@link CreateRule}.
+ *
+ * @example
+ * function validateFilledValue(change, prop) {
+ *   return change[prop].length > 0
+ * }
+ * const filled = createRule('filled', validateFilledValue)
+ *
+ * @callback ValidateValue
+ * @param {FormData} change - the data being validated
+ * @param {string} prop - the field being tested
+ * @return {boolean} - true if the value passes the validation; false otherwise
+ */
+
+/**
+ * Indicates a validation has failed and identifies the rule and the prop that
+ * triggered the failure.
+ *
+ * @example
+ * {
+ *   type: "rule1",
+ *   prop: "field1",
+ *   payload: "Rule 1 applies here"
+ * }
+ *
+ * @typedef {Object} ValidatorResult
+ * @property {!string} type - Identifies the rule
+ * @property {!string} prop - Identifies the field
+ * @property {?*} payload - Application specific data
+ */

@@ -61,7 +61,7 @@ test("empty value fails 'filled' rule ", async () => {
   const change = {
     field1: ""
   };
-  const results = await validate(change);
+  const [results] = await validate(change);
   const expected = [
     {
       type: "filled",
@@ -75,7 +75,7 @@ test("non-empty value passes 'filled' rule ", async () => {
   const change = {
     field1: "filled"
   };
-  const results = await validate(change);
+  const [results] = await validate(change);
   const expected = [];
   expect(results).toMatchObject(expected);
 });
@@ -84,7 +84,7 @@ test("async rule fails when condition is met", async () => {
   const change = {
     field2: "async1"
   };
-  const results = await validate(change);
+  const [results] = await validate(change);
   const expected = [
     {
       type: "async1",
@@ -99,7 +99,7 @@ test("async rule can be used in multiple fields", async () => {
     field2: "filled",
     field3: "async1"
   };
-  const results = await validate(change);
+  const [results] = await validate(change);
   const expected = [
     {
       type: "async1",
@@ -111,7 +111,7 @@ test("async rule can be used in multiple fields", async () => {
 });
 
 test("able to do a password check validation", async () => {
-  const results = await validate({ field4: "abc" });
+  const [results] = await validate({ field4: "abc" });
   const expected = [
     {
       type: "matchPassword",
@@ -119,15 +119,15 @@ test("able to do a password check validation", async () => {
     }
   ];
   expect(results).toMatchObject(expected);
-  const goodResults = await validate({ field4: "abc123" });
+  const [goodResults] = await validate({ field4: "abc123" });
   expect(goodResults).toHaveLength(0);
 });
 
 test("validation returns first failing rule", async () => {
-  expect((await validate({ field5: "rule1" }))[0].type).toEqual("rule1");
-  expect((await validate({ field5: "rule2" }))[0].type).toEqual("rule2");
-  expect((await validate({ field5: "rule3" }))[0].type).toEqual("rule3");
-  expect((await validate({ field5: "async1" }))[0].type).toEqual("async1");
+  expect((await validate({ field5: "rule1" }))[0][0].type).toEqual("rule1");
+  expect((await validate({ field5: "rule2" }))[0][0].type).toEqual("rule2");
+  expect((await validate({ field5: "rule3" }))[0][0].type).toEqual("rule3");
+  expect((await validate({ field5: "async1" }))[0][0].type).toEqual("async1");
 });
 
 test("simulataneous validations", async () => {
@@ -164,7 +164,7 @@ test("simulataneous validations", async () => {
   });
   expect(delayed).toHaveBeenCalledTimes(2);
   resolveDelayed(1);
-  const results = await validation4;
+  const [results] = await validation4;
   const expected = [
     { type: "delayed", prop: "field1" },
     { type: "delayed", prop: "field2" },
@@ -190,7 +190,7 @@ test("payload augmentation", async () => {
     field1: "",
     field2: ""
   };
-  const results = await validate(change);
+  const [results] = await validate(change);
   const expected = [
     {
       type: "rule1",
@@ -217,7 +217,7 @@ test("async payload augmentation", async () => {
   };
   const serverValidate = createValidator(serverRules);
   const server = createAsyncRule(
-    change => serverValidate(change),
+    change => serverValidate(change).then(([result]) => result),
     ({ type, prop }) => `${type} ${prop}`
   );
   const rules = {
@@ -227,7 +227,7 @@ test("async payload augmentation", async () => {
   const change = {
     field1: ""
   };
-  const results = await validate(change);
+  const [results] = await validate(change);
   const expected = [
     {
       type: "rule1",
@@ -251,10 +251,16 @@ test("getPayload result transformation", () => {
       payload: "payload 2"
     }
   ];
-  const messages = getPayload(results);
+  const change = {
+    field1: "",
+    field2: "",
+    field3: ""
+  };
+  const messages = getPayload([results, change]);
   const expected = {
     field1: "payload 1",
-    field2: "payload 2"
+    field2: "payload 2",
+    field3: null
   };
   expect(messages).toMatchObject(expected);
 });
