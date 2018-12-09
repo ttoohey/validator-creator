@@ -19,13 +19,17 @@ export class ValidatorError extends Error {
 export function createValidator(rules) {
   const validate = validator(rules);
   const state = {
+    cache: {},
     change: {},
     timeline: 0,
     active: false,
     blocked: []
   };
-  return async change => {
-    state.change = { ...state.change, ...change };
+  return async (change = null, ...args) => {
+    if (change !== null) {
+      state.change = { ...state.change, ...change };
+      state.cache = {};
+    }
     const timeline = ++state.timeline;
     if (state.active) {
       await new Promise(resolve => state.blocked.push(resolve));
@@ -34,7 +38,13 @@ export function createValidator(rules) {
       }
     }
     state.active = true;
-    const result = await validate(state.change);
+    let result
+    if (state.cache.change === state.change) {
+      result = state.cache.result
+    } else {
+      state.cache.change = state.change
+      state.cache.result = result = (await validate(state.change, ...args))
+    }
     state.active = false;
     state.blocked.forEach(resolve => resolve());
     state.blocked = [];
@@ -42,17 +52,20 @@ export function createValidator(rules) {
       throw new ValidatorError(result);
     }
     state.change = {};
+    state.cache = {}
     state.timeline = 0;
     return result;
   };
 }
 
 function validator(rules) {
-  return async change => {
-    const asyncRules = [];
-    const asyncResult = {};
+  return async (change, asyncResult = null) => {
+    if (!(asyncResult instanceof Map)) {
+      asyncResult = new Map(asyncResult);
+    }
+    const asyncRules = Array.from(asyncResult.keys());
     const getAsyncResult = async (rule, prop) =>
-      (await asyncResult[rule]).reduce(
+      (await asyncResult.get(rule)).reduce(
         (result, item) => result || (item && item.prop === prop ? item : null),
         null
       );
@@ -69,7 +82,7 @@ function validator(rules) {
             }
             if (Promise.resolve(result) === result) {
               asyncRules.push(rule);
-              asyncResult[rule] = result;
+              asyncResult.set(rule, result);
               result = await getAsyncResult(rule, prop);
             }
             if (result === null) continue;
@@ -133,7 +146,7 @@ export function createAsyncRule(validate, payload = null) {
 /**
  * Helper for transforming a list of validator results into a simpler object
  * mapping field names to payloads.
- * 
+ *
  * @param  {[object]} results - List of validator result object containing { type, prop, payload }
  * @return {object} - The results reduced to {[prop]: payload, ...}
  */

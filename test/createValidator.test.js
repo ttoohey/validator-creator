@@ -22,16 +22,16 @@ function createAsyncSubscriptionRule(type, validate) {
   const subscribers = [];
   const rule = jest.fn((change, prop, data) => {
     return new Promise(resolve => {
-      subscribers.push(() =>
+      subscribers.push(() => {
         resolve(
           Object.keys(change)
             .filter(prop => !validate(change[prop]))
             .map(prop => ({ type, prop }))
-        )
-      );
+        );
+      });
     });
   });
-  return [rule, () => subscribers.forEach(resolve => resolve())];
+  return [rule, i => subscribers[i]()];
 }
 
 let validate, async1;
@@ -130,7 +130,7 @@ test("validation returns first failing rule", async () => {
   expect((await validate({ field5: "async1" }))[0].type).toEqual("async1");
 });
 
-test("simulataneous validations", () => {
+test("simulataneous validations", async () => {
   const [delayed, resolveDelayed] = createAsyncSubscriptionRule(
     "delayed",
     () => false
@@ -144,26 +144,34 @@ test("simulataneous validations", () => {
   const change1 = { field1: "" };
   const change2 = { field2: "" };
   const change3 = { field3: "" };
-  validate(change1).catch(error => {
+  const validation1 = validate(change1);
+  const validation2 = validate(change2);
+  const validation3 = validate(change3);
+  const validation4 = validate();
+  expect(delayed).toHaveBeenCalledTimes(1);
+  resolveDelayed(0);
+  await validation1.catch(error => {
     expect(error instanceof ValidatorError).toBe(true);
     expect(error.validatorErrorPayload).toMatchObject([
       { type: "delayed", prop: "field1" }
     ]);
   });
-  validate(change2).catch(error => {
+  await validation2.catch(error => {
     expect(error instanceof ValidatorError).toBe(true);
   });
-  validate(change3).then(results => {
-    const expected = [
-      { type: "delayed", prop: "field1" },
-      { type: "delayed", prop: "field2" },
-      { type: "delayed", prop: "field3" }
-    ];
-    expect(results).toMatchObject(expected);
-    expect(delayed).toHaveBeenCalledTimes(2);
+  await validation3.catch(error => {
+    expect(error instanceof ValidatorError).toBe(true);
   });
-  expect(delayed).toHaveBeenCalledTimes(1);
-  resolveDelayed();
+  expect(delayed).toHaveBeenCalledTimes(2);
+  resolveDelayed(1);
+  const results = await validation4;
+  const expected = [
+    { type: "delayed", prop: "field1" },
+    { type: "delayed", prop: "field2" },
+    { type: "delayed", prop: "field3" }
+  ];
+  expect(delayed).toHaveBeenCalledTimes(2);
+  expect(results).toMatchObject(expected);
 });
 
 test("payload augmentation", async () => {
