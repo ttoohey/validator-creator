@@ -217,13 +217,13 @@ Type: [Function][40]
 
 ### Parameters
 
+-   `value` **any** the value to be tested
 -   `change` **[FormData][42]** the data being validated
--   `prop` **[string][36]** the field being tested
 
 ### Examples
 
 ```javascript
-function validateFilledValue(change, prop) {
+function validateFilledValue(value, change) {
   return change[prop].length > 0
 }
 const filled = createRule('filled', validateFilledValue)
@@ -240,6 +240,7 @@ Type: [Function][40]
 ### Parameters
 
 -   `result` **[ValidatorResult][33]** Identifies the rule and field that failed the validation
+-   `change` **[FormData][42]** The change that caused the validation to be evaluated
 
 Returns **any** Application specific data
 

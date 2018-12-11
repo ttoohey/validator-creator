@@ -71,17 +71,17 @@ createRule("example", value => false, { text: "Example payload text" });
 ```
 
 The payload can be a callback function that returns a payload. The callback will
-be passed the `{ type, prop }` object.
+be passed the `{ type, prop }` object and the data passed to `validate()`.
 
 ```js
 const example = createRule(
   "example",
   value => false,
-  ({ type, prop }) => `${type} payload for ${prop}`
+  ({ type, prop }, data) => `${type} payload for ${prop} with value '${data[prop]}'`
 );
 const validate = createValidator({ field1: [example] });
-validate({ field1: "" }).then(([result]) => {
-  // --> result: { type: "example", prop: "field1", payload: "example payload for field1" }
+validate({ field1: "test" }).then(([result]) => {
+  // --> result: { type: "example", prop: "field1", payload: "example payload for field1 with value 'test'" }
 });
 ```
 

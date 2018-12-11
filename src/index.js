@@ -111,15 +111,16 @@ function validator(rules) {
  */
 export function createRule(type, validate, payload = null) {
   if (payload === null) {
-    return (change, prop) => (validate(change[prop]) ? null : { type, prop });
+    return (change, prop) =>
+      validate(change[prop], change) ? null : { type, prop };
   }
   const getPayload =
-    payload instanceof Function ? result => payload(result) : () => payload;
+    payload instanceof Function ? (...args) => payload(...args) : () => payload;
   return (change, prop) => {
-    if (validate(change[prop])) {
+    if (validate(change[prop], change)) {
       return null;
     }
-    return { type, prop, payload: getPayload({ type, prop }) };
+    return { type, prop, payload: getPayload({ type, prop }, change) };
   };
 }
 
@@ -139,11 +140,11 @@ export function createAsyncRule(validate, payload = null) {
     return validate;
   }
   const getPayload =
-    payload instanceof Function ? result => payload(result) : () => payload;
+    payload instanceof Function ? (...args) => payload(...args) : () => payload;
   return async change =>
     (await validate(change)).map(result => ({
       ...result,
-      payload: getPayload(result)
+      payload: getPayload(result, change)
     }));
 }
 
@@ -191,9 +192,10 @@ export function getPayload([results, change]) {
 
 /**
  * Get payload data to augment a {@link ValidatorResult}
- * 
+ *
  * @callback GetPayload
  * @param {ValidatorResult} result - Identifies the rule and field that failed the validation
+ * @param {FormData} change - The change that caused the validation to be evaluated
  * @return {*} - Application specific data
  */
 
@@ -222,7 +224,7 @@ export function getPayload([results, change]) {
 
 /**
  * Return value from the {@link Validate} function
- * 
+ *
  * @typedef {Array} ValidateResult
  * @property {ValidatorResult[]} 0
  * @property {FormData} 1
@@ -245,14 +247,14 @@ export function getPayload([results, change]) {
  * Used as the `validate` parameter to {@link CreateRule}.
  *
  * @example
- * function validateFilledValue(change, prop) {
+ * function validateFilledValue(value, change) {
  *   return change[prop].length > 0
  * }
  * const filled = createRule('filled', validateFilledValue)
  *
  * @callback ValidateValue
+ * @param {*} value - the value to be tested
  * @param {FormData} change - the data being validated
- * @param {string} prop - the field being tested
  * @return {boolean} - true if the value passes the validation; false otherwise
  */
 
