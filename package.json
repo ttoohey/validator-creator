@@ -25,6 +25,12 @@
     "clean": "rm -rf dist *.tgz",
     "prepare": "npm run clean && npm test && npm run build"
   },
+  "browserslist": [
+    ">0.2%",
+    "not dead",
+    "not ie <= 11",
+    "not op_mini all"
+  ],
   "devDependencies": {
     "@babel/cli": "^7.4.4",
     "@babel/core": "^7.4.5",
@@ -45,12 +51,5 @@
     "eslint-plugin-standard": "^4.0.0",
     "jest": "^24.8.0",
     "prettier": "^1.18.2"
-  },
-  "babel": {
-    "comments": false,
-    "presets": [
-      "@babel/preset-env",
-      "minify"
-    ]
   }
 }

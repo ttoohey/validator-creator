@@ -31,35 +31,58 @@ export function createValidator(rules) {
     active: false,
     blocked: []
   };
-  return async (change = null, ...args) => {
+  return (change = null, ...args) => {
     if (change !== null) {
       state.change = { ...state.change, ...change };
       state.cache = {};
     }
     const timeline = ++state.timeline;
-    if (state.active) {
-      await new Promise(resolve => state.blocked.push(resolve));
-      if (timeline !== state.timeline) {
-        throw new ValidatorError(null);
-      }
-    }
+    const blocker = state.active
+      ? new Promise(resolve => state.blocked.push(resolve))
+      : null;
     state.active = true;
-    if (state.cache.change !== state.change) {
-      state.cache.change = state.change;
-      state.cache.result = await validate(state.change, ...args);
-    }
-    state.active = false;
-    state.blocked.forEach(resolve => resolve());
-    state.blocked = [];
-    if (timeline !== state.timeline) {
-      throw new ValidatorError(state.cache.result);
-    }
-    const returnValue = [state.cache.result, state.cache.change];
-    state.change = {};
-    state.cache = {};
-    state.timeline = 0;
-    return returnValue;
+    return createValidatorAsync(
+      state,
+      timeline,
+      blocker,
+      change,
+      validate,
+      ...args
+    );
   };
+}
+
+async function createValidatorAsync(
+  state,
+  timeline,
+  blocker,
+  change,
+  validate,
+  ...args
+) {
+  if (blocker) {
+    await blocker;
+    if (timeline !== state.timeline) {
+      throw new ValidatorError(null);
+    }
+  }
+  state.active = true;
+  let result = null;
+  if (state.cache.change !== state.change) {
+    state.cache.change = state.change;
+    result = state.cache.result = await validate(state.change, ...args);
+  }
+  state.active = false;
+  state.blocked.forEach(resolve => resolve());
+  state.blocked = [];
+  if (timeline !== state.timeline) {
+    throw new ValidatorError(result);
+  }
+  const returnValue = [state.cache.result, state.cache.change];
+  state.change = {};
+  state.cache = {};
+  state.timeline = 0;
+  return returnValue;
 }
 
 function validator(rules) {
